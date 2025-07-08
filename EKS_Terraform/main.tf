@@ -98,7 +98,7 @@ resource "aws_eks_cluster" "my-cluster" {
 
 resource "aws_eks_node_group" "my" {
   cluster_name    = aws_eks_cluster.my.name
-  node_group_name = "devopsshack-node-group"
+  node_group_name = "my-node-group"
   node_role_arn   = aws_iam_role.my_node_group_role.arn
   subnet_ids      = aws_subnet.my_subnet[*].id
 
@@ -165,11 +165,11 @@ resource "aws_iam_role_policy_attachment" "my_node_group_role_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "my_node_group_cni_policy" {
-  role       = aws_iam_role.devopsshack_node_group_role.name
+  role       = aws_iam_role.my_node_group_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
-resource "aws_iam_role_policy_attachment" "devopsshack_node_group_registry_policy" {
-  role       = aws_iam_role.devopsshack_node_group_role.name
+resource "aws_iam_role_policy_attachment" "my_node_group_registry_policy" {
+  role       = aws_iam_role.my_node_group_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }

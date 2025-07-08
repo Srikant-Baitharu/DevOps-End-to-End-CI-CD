@@ -1,0 +1,124 @@
+--- INSTALLATION IN JENKINS SERVER---
+
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt-get update
+sudo apt-get install jenkins
+
+sudo apt install docker.io -y
+
+sudo chmod 666 /var/run/docker.sock
+
+it runs on 8080 port
+
+-- INSTALL PLUGGINS IN JENKINS --
+
+Sonarqube scanner , config file provider , maven integration , pipeline maven integration , kubernetes ,
+kubernetes credential , kubernetes cli , kubernetes client API , docker , docker pipeline , eclipse temurin installer
+
+---INSTALLATION IN NEXUS SERVER---
+
+sudo apt update
+
+sudo apt install docker.io -y
+
+sudo docker run -d -p 8081:8081 sonatype/nexus3
+
+sudo docker exec -it imageId /bin/bash
+
+cd sonatype-work
+
+cd nexus3
+
+cat admin.password
+
+
+---INSTALLATION IN SONARQUBE SERVER---
+
+sudo apt update
+
+sudo apt install docker.io -y
+
+sudo docker run -d -p 9000:9000 sonarqube:lts-community
+
+username: admin (default)
+password: admin (default)
+
+
+
+--- PROMETHEUS , GRAFANA AND BLACKBOX EXPORTER INSTALLATION IN SAME SERVER ---
+
+--PROMETHEUS--
+
+wget https://github.com/prometheus/prometheus/releases/download/v3.4.2/prometheus-3.4.2.linux-amd64.tar.gz
+
+ls
+
+tar -xvf prometheus-3.4.2.linux-amd64.tar.gz  // extract file
+
+rm .tar.gz file
+
+mv prometheus-3.4.2.linux-amd64/ prometheus  // rename
+
+cd prometheu/
+
+./prometheus &                               // to run on port 9090 (default)
+
+--BLACKBOX--
+
+wget URL
+
+tar -xvf .tar.gzfile
+
+rm .tar.gzfile
+
+mv blackbox...amd64/ blackbox
+
+cd blackbox/
+
+./blackbox_exporter &                       // to run on port 9115    & -> means it will run in background
+
+--GRAFANA--
+
+sudo apt-get install -y adduser libfontconfig1 musl
+
+wget https://dl.grafana.com/enterprise/release/grafana-enterprise_12.0.2_amd64.deb
+
+sudo dpkg -i grafana-enterprise_12.0.2_amd64.deb
+
+sudo /bin/systemctl start grafana-server    // it will run on port 3000 
+
+
+
+---for access data--
+cd prometheus
+ls
+vi prometheus.yml
+add this ->
+- job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response.
+    static_configs:
+      - targets:
+        - http://prometheus.io    # Target to probe with http.
+        - https://prometheus.io   # Target to probe with https.
+        - http://example.com:8080 # Target to probe with http on port 8080.
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+insert link which we want to monitor that is our site URL
+
+
+all can access by <ec2 instance ip>:port
+grafana=3000
+blackbox=9115
+prometheus=9090

@@ -29,7 +29,7 @@ This project implements a complete production-level CI/CD pipeline with DevSecOp
    - Performs code analysis using SonarQube.
    - Scans the Docker image with Trivy.
 3. 🐳 Docker images are pushed to DockerHub.
-4. ☁️ Terraform provisions infrastructure (EKS, etc.) on AWS.
+4. ☁️ Terraform provisions infrastructure (EKS, etc.) on AWS (Manually).
 5. 🚀 Jenkins deploys the application to Kubernetes.
 6. 🔒 Sealed Secrets (if used) manage Kubernetes secrets securely.
 7. 📈 Prometheus + Grafana setup for monitoring metrics and health.

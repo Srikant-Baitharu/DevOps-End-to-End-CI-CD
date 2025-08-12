@@ -1,0 +1,321 @@
+Create a git repo
+
+push ur code(source code) to that repo
+
+create security group and all inbound rules .. attaching screenshot
+
+create 2 instance of t2.medium for SonarQube and nexus(min 4 gb required for nxus)
+
+create a instance of t2.large for Jenkins (Storage 25gb)
+
+install mobaXtreme for good practices(make sure that ssh keepalive is turn on)
+
+connect all server through mobaXtreme
+
+In Jenkins:
+sudo apt update
+sudo apt install openjdk-17-jre-headless -y
+
+for installing Jenkins:
+vi 1.sh
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt-get update
+sudo apt-get install Jenkins -y
+sudo chmod +x 1.sh (give permission to execute)
+./1.sh  (execute)
+
+sudo apt install docker.io(must install docker on the same machine where Jenkins if your pipeline need to build docker images or docker push)
+sudo chmod 666 /var/run/docker.sock(changes the permissions of the Docker socket so that any user on the system can run Docker commands without sudo.)
+
+Now by default Jenkins run on port 8080
+(Paste public Ip address in browser with 8080 port : publicip:8080)
+for password: sudo cat /var/lib/Jenkins/secrets/initialAdminPassword
+
+Now we have to install some plugins that is required for our project
+1. SonarQube Scanner
+2. Maven integration
+3. Config File Provider
+4. Pipeline maven integration
+5. Kubernetes
+6. Kubernetes credentials
+7. Kubernetes CLI
+8. Kuberntes client API
+9. Docker
+10. Docker Pipeline
+11. Eclipse Temurin installer
+12. Pipeline stage view
+
+in Jenkins server we have to install trivy
+sudo apt-get install wget apt-transport-https gnupg lsb-release
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update
+sudo apt-get install trivy
+
+
+In Nexus Server:
+sudo apt update
+sudo apt install docker.io (we access nexus with the help of docker container)
+sudo docker run -d -p 8081:8081 sonatype/nexus3   (hostport:containerport) by default nexus run on 8081 in containerport.. but hostport can change
+sudo docker ps
+
+Now access the server in port 8081 (publicip:8081)
+for password:
+sudo docker exec -it containerId /bin/bash
+cd sonatype-work/
+cd nexus3
+cat admin.password
+
+In SonarQube:
+sudo apt update
+sudo apt install docker.io -y
+sudo docker run -d -p 9000:9000 sonarqube:lts-community
+sudo docker ps
+access it on -> publicip:9000
+username: admin
+password: admin
+
+next step:
+Create a token in SonarQube
+administartion->security-> generate token
+
+now in Jenkins 
+manage Jenkins -> tools -> configure all servers
+
+NOW START Writing Pipeline that you can check in my Jenkins file
+
+create credentials inside manage Jenkins -> credentilas -> system -> Global credentials
+kind : secret text
+secret: token that is generated 
+id: sonar-token
+
+Now manage Jenkins -> system (We configure servers)
+Name: sonar-scanner
+serverurl: SonarQubeserverurl
+
+Now in pom.xml file 
+1. go inside distributionManagement and add url of nexus realeses and snapshots
+
+Now in Jenkins
+Add a new config inside managed files for maven-settings
+and in content give all id username and password for both maven-releases and snapshots
+
+Allow redeploy in nexus repositories (for future error)
+
+now Create repository in dockerhub
+
+##Now next part of our project that is deployment (aws eks)
+
+create instance named terra-instance for terraform server t2.medium
+
+sudo apt update
+now install aws cli
+curl "https://awscli.amazon.aws.com/awscli-exe-linux_64.zip" -o "awscliv2.zip"
+sudo apt install unzip
+unzip awscliv2.zip
+sudo ./aws/install
+
+create access key for cli iam user
+
+aws configure
+
+Now install terraform
+sudo snap install terraform --classic
+after installation:
+mkdir terra
+cd terra
+vi main.tf (put all code )
+vi output.tf (put all code)
+vi variables.tf(put all code)
+put sudo before this command if any error occurs
+
+terraform init
+terraform plan
+terraform apply --auto-approve
+
+kubectl get nodes
+sudo snap install kubectl --classic
+
+Now cluster is already created with help of iac(terraform)
+so now we have to connect it
+for connecting use this command
+aws eks --region ap-south-1 update-kubeconfig --name cluster-name
+kubectl get nodes
+
+come out of all folder
+create a service acc
+vi svc.yml
+apiVersion: v1
+kind: ServiceAccount
+metadata: 
+	name: Jenkins
+	namespace: webapps
+
+kubectl create ns webapps
+kubectl apply -f svc.yml
+
+create a role
+sudo vi role.yml -->
+-------------------------------------------------------------------------------
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: app-role
+  namespace: webapps
+rules:
+  - apiGroups:
+        - ""
+        - apps
+        - autoscaling
+        - batch
+        - extensions
+        - policy
+        - rbac.authorization.k8s.io
+    resources:
+      - pods
+      - secrets
+      - componentstatuses
+      - configmaps
+      - daemonsets
+      - deployments
+      - events
+      - endpoints
+      - horizontalpodautoscalers
+      - ingress
+      - jobs
+      - limitranges
+      - namespaces
+      - nodes
+      - pods
+      - persistentvolumes
+      - persistentvolumeclaims
+      - resourcequotas
+      - replicasets
+      - replicationcontrollers
+      - serviceaccounts
+      - services
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+------------------------------------------------------------------------------------------
+kubectl apply -f role.yml
+
+//Now bind the role to service account
+sudo vi bind.yml  -->
+------------------------------------------------------------------------------------------
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: app-rolebinding
+  namespace: webapps 
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: app-role 
+subjects:
+- namespace: webapps 
+  kind: ServiceAccount
+  name: jenkins 
+-------------------------------------------------------------------------------------------
+kubectl apply -f bind.yml
+
+--generate token--
+sudo vi jen-secret.yml  -->
+-------------------------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: mysecretname
+  annotations:
+    kubernetes.io/service-account.name: myserviceaccount
+-------------------------------------------------------------------------------------------
+
+kubectl apply -f jen-secret.yml -n webapps
+
+kubectl create secret docker-registry
+
+kubectl describe secret mysecretname -n webapps
+
+
+//Now add credentials in jenkins
+Modify pipeline
+
+
+
+
+--- PROMETHEUS , GRAFANA AND BLACKBOX EXPORTER INSTALLATION IN SAME SERVER ---
+
+--PROMETHEUS--
+
+wget https://github.com/prometheus/prometheus/releases/download/v3.4.2/prometheus-3.4.2.linux-amd64.tar.gz
+
+ls
+
+tar -xvf prometheus-3.4.2.linux-amd64.tar.gz  // extract file
+
+rm .tar.gz file
+
+mv prometheus-3.4.2.linux-amd64/ prometheus  // rename
+
+cd prometheu/
+
+./prometheus &                               // to run on port 9090 (default)
+
+--BLACKBOX--
+
+wget URL
+
+tar -xvf .tar.gzfile
+
+rm .tar.gzfile
+
+mv blackbox...amd64/ blackbox
+
+cd blackbox/
+
+./blackbox_exporter &                       // to run on port 9115    & -> means it will run in background
+
+--GRAFANA--
+
+sudo apt-get install -y adduser libfontconfig1 musl
+
+wget https://dl.grafana.com/enterprise/release/grafana-enterprise_12.0.2_amd64.deb
+
+sudo dpkg -i grafana-enterprise_12.0.2_amd64.deb
+
+sudo /bin/systemctl start grafana-server    // it will run on port 3000 
+
+
+
+---for access data--
+cd prometheus
+ls
+vi prometheus.yml
+add this ->
+- job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response.
+    static_configs:
+      - targets:
+        - http://prometheus.io    # Target to probe with http.
+        - https://prometheus.io   # Target to probe with https.
+        - http://example.com:8080 # Target to probe with http on port 8080.
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+insert link which we want to monitor that is our site URL
+
+
+all can access by <ec2 instance ip>:port
+grafana=3000
+blackbox=9115
+prometheus=9090
